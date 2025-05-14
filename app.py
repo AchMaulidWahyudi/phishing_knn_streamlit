@@ -63,15 +63,13 @@ with tab2:
     X = df.drop(columns=[label_col])
     y = df[label_col]
 
-    
-# Pastikan semua data numerik dan tidak ada NaN
+    # Pastikan semua data numerik dan tidak ada NaN
 X = X.fillna(0)
 X = X.apply(pd.to_numeric, errors='coerce')
 X = X.fillna(0)
 
 # Jalankan mutual information
 mi = mutual_info_classif(X, y)
-
     top_features = pd.Series(mi, index=X.columns).sort_values(ascending=False).head(n_features).index
     X_selected = X[top_features]
 
