@@ -1,110 +1,177 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split, KFold
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.metrics import accuracy_score
 from sklearn.feature_selection import mutual_info_classif
 
-# ====================== SETUP HALAMAN ======================
-st.set_page_config(page_title="Aplikasi Deteksi Website Phishing", layout="wide")
+st.set_page_config(page_title="KNN Phishing Classifier", layout="wide")
 
-st.title('🔐 Aplikasi Deteksi Website Phishing')
-st.write("### Klasifikasi website phishing menggunakan algoritma K-Nearest Neighbors (KNN)")
+st.markdown("""
+    <style>
+        .stApp {
+            background-color: #d4f4dd;
+        }
+        .css-1v3fvcr, .css-18e3th9 {
+            background-color: #d4f4dd !important;
+        }
+        .block-container {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+        .blue-button button {
+            background-color: #0074cc;
+            color: white;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
-# ====================== LOAD DATA ======================
-df = pd.read_csv("phishing_website_dataset.csv")
-st.header("1. Tentang Dataset")
-st.write("Dataset ini digunakan untuk mengklasifikasikan website apakah phishing atau bukan.")
-st.write("Jumlah data:", df.shape)
-st.dataframe(df.head())
+@st.cache_data
+def load_data():
+    try:
+        data = pd.read_csv("phishing_website_dataset.csv")
+        if data.isnull().any().any():
+            st.warning("Warning: Dataset contains missing values. Rows with missing values will be dropped.")
+            data = data.dropna()
+        return data
+    except FileNotFoundError:
+        st.error("Error: Dataset file 'phishing_website_dataset.csv' not found in the working directory.")
+        return pd.DataFrame()  # Return empty DataFrame to avoid further errors
+    except Exception as e:
+        st.error(f"Error loading dataset: {e}")
+        return pd.DataFrame()
 
-# Tentukan kolom target
-label_col = "Result" if "Result" in df.columns else df.columns[-1]
+df = load_data()
 
-# Pisahkan fitur dan label
-X = df.drop(columns=[label_col])
-y = df[label_col]
+tab1, tab2, tab3 = st.tabs(["🏠 Home", "📊 Hasil Pengujian", "🧪 Coba Datamu"])
 
-# Pastikan data numerik
-X = X.fillna(0)
-X = X.apply(pd.to_numeric, errors='coerce').fillna(0)
+with tab1:
+    st.header("Tentang Aplikasi")
+    st.markdown("""
+    Aplikasi ini digunakan untuk melakukan **klasifikasi phishing website** menggunakan algoritma **K-Nearest Neighbors (KNN)**.
 
-# Seleksi fitur terbaik (top 30)
-mi = mutual_info_classif(X, y)
-top_features = pd.Series(mi, index=X.columns).sort_values(ascending=False).head(30).index
-X_selected = X[top_features]
+    Anda dapat melakukan evaluasi model dengan menggunakan metode:
+    - **K-Fold Cross Validation**
+    - **Split Test**
 
-# ====================== SIDEBAR - PARAMETER ======================
-st.sidebar.header("⚙️ Pengaturan KNN")
-k = st.sidebar.slider("Nilai k (tetangga terdekat)", 1, 15, 3)
-metric = st.sidebar.selectbox("Jarak", ["euclidean", "manhattan", "chebyshev"])
-eval_method = st.sidebar.radio("Metode Evaluasi", ["Split Test", "K-Fold"])
-n_splits = st.sidebar.slider("Jumlah Fold (K-Fold)", 2, 10, 5)
+    Setelah menemukan model terbaik, Anda dapat mencobanya terhadap data baru.
+    ---
+    """)
 
-# ====================== EVALUASI MODEL ======================
-st.header("2. Evaluasi Model")
+with tab2:
+    st.header("Evaluasi Model")
 
-model = KNeighborsClassifier(n_neighbors=k, metric=metric)
-
-if eval_method == "Split Test":
-    X_train, X_test, y_train, y_test = train_test_split(X_selected, y, test_size=0.2, random_state=42)
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-
-    acc = accuracy_score(y_test, y_pred)
-    prec = precision_score(y_test, y_pred, average='macro')
-    rec = recall_score(y_test, y_pred, average='macro')
-    f1 = f1_score(y_test, y_pred, average='macro')
-    cm = confusion_matrix(y_test, y_pred)
-
-    st.subheader("📋 Hasil Evaluasi (Split Test)")
-    st.write(f"- Akurasi: **{acc:.4f}**")
-    st.write(f"- Presisi: **{prec:.4f}**")
-    st.write(f"- Recall: **{rec:.4f}**")
-    st.write(f"- F1-Score: **{f1:.4f}**")
-    st.write("Confusion Matrix:")
-    st.dataframe(pd.DataFrame(cm))
-
-else:
-    st.subheader("📋 Hasil Evaluasi (K-Fold Cross Validation)")
-    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
-    scores = []
-    for train_idx, test_idx in kf.split(X_selected):
-        X_train_k, X_test_k = X_selected.iloc[train_idx], X_selected.iloc[test_idx]
-        y_train_k, y_test_k = y.iloc[train_idx], y.iloc[test_idx]
-        model.fit(X_train_k, y_train_k)
-        y_pred_k = model.predict(X_test_k)
-        scores.append(accuracy_score(y_test_k, y_pred_k))
-
-    st.write("Akurasi Tiap Fold:", scores)
-    st.success(f"Rata-rata Akurasi: **{np.mean(scores):.4f}**")
-
-    # Visualisasi bar chart
-    fig = plt.figure()
-    plt.bar(range(1, len(scores) + 1), scores, color='skyblue')
-    plt.xlabel("Fold ke-")
-    plt.ylabel("Akurasi")
-    plt.title("Akurasi Tiap Fold")
-    st.pyplot(fig)
-
-# ====================== PREDIKSI DATA BARU ======================
-st.header("3. Prediksi Data Baru")
-
-st.write("Masukkan nilai fitur untuk melakukan prediksi apakah website termasuk phishing atau bukan.")
-
-user_input = {}
-for feature in top_features:
-    user_input[feature] = st.sidebar.number_input(f"{feature}", value=0)
-
-if st.sidebar.button("Prediksi"):
-    input_array = np.array([list(user_input.values())])
-    model.fit(X_selected, y)
-    prediction = model.predict(input_array)[0]
-
-    if prediction == 1:
-        st.sidebar.write("### ⚠️ Website ini diprediksi sebagai **Phishing**")
+    if df.empty:
+        st.error("Dataset tidak tersedia atau kosong. Silakan periksa file dataset.")
     else:
-        st.sidebar.write("### ✅ Website ini diprediksi **Aman**")
+        eval_method = st.selectbox("Pilih Metode Evaluasi", ["K-Fold", "Split Test"])
+
+        label_col = st.selectbox("Pilih Kolom Target", df.columns, index=len(df.columns)-1)
+        n_features = st.selectbox("Jumlah Fitur Teratas (Information Gain)", [30, 25, 20])
+        k_val = st.slider("Nilai k untuk KNN", 1, 15, 3)
+        metric = st.selectbox("Metric Jarak", ["euclidean", "manhattan", "chebyshev"])
+        k_fold_val = st.slider("Jumlah Fold (Jika pakai K-Fold)", 2, 10, 5)
+
+        X = df.drop(columns=[label_col])
+        y = df[label_col]
+
+        try:
+            mi = mutual_info_classif(X, y)
+            top_features = pd.Series(mi, index=X.columns).sort_values(ascending=False).head(n_features).index
+            X_selected = X[top_features]
+        except Exception as e:
+            st.error(f"Error during feature selection: {e}")
+            top_features = []
+            X_selected = pd.DataFrame()
+
+        model = KNeighborsClassifier(n_neighbors=k_val, metric=metric)
+
+        if eval_method == "Split Test":
+            st.subheader("🔍 Hasil Evaluasi (Split Test)")
+            try:
+                X_train, X_test, y_train, y_test = train_test_split(X_selected, y, test_size=0.2, random_state=42)
+                model.fit(X_train, y_train)
+                y_pred = model.predict(X_test)
+                acc = accuracy_score(y_test, y_pred)
+                st.success(f"Akurasi (Split Test): {acc:.4f}")
+            except Exception as e:
+                st.error(f"Error during Split Test evaluation: {e}")
+
+        else:
+            st.subheader("🔁 Hasil Evaluasi (K-Fold)")
+            try:
+                kf = KFold(n_splits=k_fold_val, shuffle=True, random_state=42)
+                scores = []
+                for fold, (train_index, test_index) in enumerate(kf.split(X_selected), 1):
+                    X_train, X_test = X_selected.iloc[train_index], X_selected.iloc[test_index]
+                    y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+                    model.fit(X_train, y_train)
+                    y_pred = model.predict(X_test)
+                    acc = accuracy_score(y_test, y_pred)
+                    scores.append(acc)
+                    st.write(f"Fold {fold}: Akurasi = {acc:.4f}")
+                st.success(f"Rata-rata Akurasi (K-Fold): {np.mean(scores):.4f}")
+            except Exception as e:
+                st.error(f"Error during K-Fold evaluation: {e}")
+
+with tab3:
+    st.header("Prediksi Data Baru")
+
+    if df.empty:
+        st.error("Dataset tidak tersedia atau kosong. Tidak dapat melakukan prediksi.")
+    else:
+        eval_mode = st.selectbox("Gunakan Model dari:", ["K-Fold", "Split Test"])
+        uploaded_file = st.file_uploader("Upload file CSV data baru", type=["csv"])
+
+        # Initialize top_features to empty list to avoid undefined error
+        top_features = []
+
+        # We need to define top_features and model parameters consistently with tab2 selections
+        # To do this, we replicate the selections with default values or use session state if needed
+        # For simplicity, we use default values here
+        label_col = df.columns[-1]
+        n_features = 30
+        k_val = 3
+        metric = "euclidean"
+
+        try:
+            X = df.drop(columns=[label_col])
+            y = df[label_col]
+            mi = mutual_info_classif(X, y)
+            top_features = pd.Series(mi, index=X.columns).sort_values(ascending=False).head(n_features).index
+            X_selected = X[top_features]
+        except Exception as e:
+            st.error(f"Error during feature selection: {e}")
+            top_features = []
+            X_selected = pd.DataFrame()
+
+        if uploaded_file:
+            try:
+                data_new = pd.read_csv(uploaded_file)
+                st.write("📄 Data yang diupload:")
+                st.dataframe(data_new.head())
+
+                missing_features = [feat for feat in top_features if feat not in data_new.columns]
+                if missing_features:
+                    st.error(f"Data yang diupload tidak memiliki kolom fitur yang diperlukan: {missing_features}")
+                else:
+                    X_upload = data_new[top_features]
+
+                    model = KNeighborsClassifier(n_neighbors=k_val, metric=metric)
+                    if eval_mode == "K-Fold":
+                        model.fit(X_selected, y)
+                    else:
+                        X_train, _, y_train, _ = train_test_split(X_selected, y, test_size=0.2, random_state=42)
+                        model.fit(X_train, y_train)
+
+                    pred = model.predict(X_upload)
+                    data_new['Prediksi'] = pred
+                    st.success("✅ Prediksi selesai!")
+                    st.dataframe(data_new)
+
+                    csv = data_new.to_csv(index=False).encode('utf-8')
+                    st.download_button("📥 Download Hasil", csv, file_name="hasil_prediksi.csv", mime='text/csv')
+            except Exception as e:
+                st.error(f"Error saat memproses file yang diupload atau melakukan prediksi: {e}")
