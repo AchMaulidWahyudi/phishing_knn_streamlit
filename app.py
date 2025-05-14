@@ -12,18 +12,18 @@ st.set_page_config(page_title="KNN Phishing Classifier", layout="wide")
 st.markdown("""
     <style>
         .stApp {
-            background-color: #cce7ff;
+            background-color: #73946B;
         }
         .css-1v3fvcr, .css-18e3th9 {
-            background-color: #cce7ff !important;
+            background-color: #73946B !important;
         }
         .block-container {
             padding-top: 2rem;
             padding-bottom: 2rem;
         }
         .blue-button button {
-            background-color: #0056b3;
-            color: white;
+            background-color: #73946B;
+            color: black;
         }
     </style>
 """, unsafe_allow_html=True)
